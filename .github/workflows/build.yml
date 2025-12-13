@@ -1,4 +1,4 @@
-name: Build Tauri App for Windows, macOS, and Linux
+name: Build Tauri App for Windows, macOS
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, macos-latest, ubuntu-latest]
+        platform: [windows-latest, macos-latest]
 
     runs-on: ${{ matrix.platform }}
     
@@ -39,23 +39,6 @@ jobs:
       with:
         toolchain: stable
         targets: aarch64-apple-darwin, x86_64-apple-darwin
-
-    - name: Install Rust (Linux)
-      if: matrix.platform == 'ubuntu-latest'
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        targets: x86_64-unknown-linux-gnu
-
-    - name: Install Linux dependencies
-      if: matrix.platform == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libwebkit2gtk-4.1-dev \
-          libjavascriptcoregtk-4.1-dev \
-          build-essential curl wget file libxdo-dev libssl-dev \
-          libayatana-appindicator3-dev librsvg2-dev \
-          libgtk-3-dev libsoup2.4-dev
 
     - name: Install macOS dependencies
       if: matrix.platform == 'macos-latest'
@@ -85,12 +68,3 @@ jobs:
         path: |
           src-tauri/target/release/bundle/dmg/*.dmg
           src-tauri/target/release/bundle/macos/*.app
-
-    - name: Upload Linux artifacts
-      if: matrix.platform == 'ubuntu-latest'
-      uses: actions/upload-artifact@v4
-      with:
-        name: reflex-prompter-linux
-        path: |
-          src-tauri/target/release/bundle/deb/*.deb
-          src-tauri/target/release/bundle/appimage/*.AppImage
