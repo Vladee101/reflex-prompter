@@ -126,20 +126,20 @@ Slide 4: "I am opening" (action + description)
   <h2>🛠️ For Developers</h2>
     
    <h3>Build from Source</h3>
-    <pre>
-# Clone the repository
+    
+<h3># Clone the repository</h3>
 git clone https://github.com/Vladee101/reflex-prompter.git
 cd reflex-prompter
 
-# Install dependencies
+<h3># Install dependencies</h3>
 npm install
 
-# Start development mode
+<h3># Start development mode</h3>
 npm run tauri dev
 
-# Build for production
+<h3># Build for production</h3>
 npm run tauri build
-    </pre>
+    
 
    <h3>Tech Stack</h3>
     <ul>
