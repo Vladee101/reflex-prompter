@@ -1,11 +1,11 @@
 [package]
-name = "reflex-prompter"
-version = "1.0.0"
+name = "reflex"
+version = "1.0.1"
 description = "A presentation prompter for language practice"
 authors = ["Your Name"]
 license = "MIT OR Apache-2.0"
 repository = ""
-default-run = "reflex-prompter"
+default-run = "reflex"
 edition = "2021"
 
 [build-dependencies]

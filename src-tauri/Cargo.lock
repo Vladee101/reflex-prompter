@@ -3182,7 +3182,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "reflex-prompter"
+name = "reflex"
 version = "1.0.0"
 dependencies = [
  "serde",

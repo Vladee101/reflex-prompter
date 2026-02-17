@@ -1,16 +1,16 @@
 {
-  "name": "reflex-prompter",
-  "version": "1.0.0",
+  "name": "reflex",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "preview": "vite preview",
-  "tauri": "tauri",
-  "tauri:dev": "tauri dev",
-  "tauri:build": "tauri build"
-},
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
