@@ -1,18 +1,29 @@
-name: Build Tauri App for Windows, macOS
+name: Release App
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual triggers
+    tags:
+      - 'v*'           # Запуск по тегам v1.0.0, v1.0.1 и т.д.
+  workflow_dispatch:   # Ручной запуск
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  build-and-release:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, macos-latest]
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ''
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
     
@@ -23,22 +34,13 @@ jobs:
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'   # Change from '18' to '20'
+        node-version: '20'
         cache: 'npm'
 
-    - name: Install Rust (Windows)
-      if: matrix.platform == 'windows-latest'
+    - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        targets: x86_64-pc-windows-msvc
-
-    - name: Install Rust (macOS)
-      if: matrix.platform == 'macos-latest'
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        targets: aarch64-apple-darwin, x86_64-apple-darwin
+        targets: ${{ matrix.target }}
 
     - name: Install macOS dependencies
       if: matrix.platform == 'macos-latest'
@@ -48,10 +50,19 @@ jobs:
     - name: Install npm dependencies
       run: npm ci
 
-    - name: Build the app
-      run: npm run tauri build
+    - name: Build the app and create release
+      uses: tauri-apps/tauri-action@v0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tagName: v__VERSION__
+        releaseName: 'Reflex Prompter v__VERSION__'
+        releaseBody: 'Новые возможности и исправления в этой версии:'
+        releaseDraft: true
+        prerelease: false
+        args: ${{ matrix.args }}
 
-    - name: Upload Windows artifacts
+    - name: Upload Windows artifacts (backup)
       if: matrix.platform == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
@@ -60,11 +71,11 @@ jobs:
           src-tauri/target/release/bundle/msi/*.msi
           src-tauri/target/release/bundle/nsis/*.exe
 
-    - name: Upload macOS artifacts
+    - name: Upload macOS artifacts (backup)
       if: matrix.platform == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
-        name: reflex-prompter-macos
+        name: reflex-prompter-macos-${{ matrix.target }}
         path: |
           src-tauri/target/release/bundle/dmg/*.dmg
           src-tauri/target/release/bundle/macos/*.app
