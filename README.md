@@ -32,7 +32,9 @@
         <li>🖥️ <strong>Full-Screen Presentation Mode:</strong> Large, clear text optimized for projectors and screen sharing</li>
         <li>⌨️ <strong>Single-Key Control:</strong> Navigate slides with SPACEBAR or arrow keys—keep your focus on teaching</li>
         <li>📝 <strong>Quick Lesson Creation:</strong> Build lesson plans with concise prompts (50-character limit for clarity)</li>
+        <li> Added: Long Form Text + Images</li>
         <li>🗂️ <strong>Word Stock Sidebar:</strong> Automatically collects all unique phrases from your lesson for review</li>
+        <li> Added: You can drag slides up and down now</li>
         <li>💾 <strong>Local Storage:</strong> All lessons saved locally—no accounts, no subscriptions</li>
         <li>📤 <strong>Import/Export:</strong> Backup lessons or share them with colleagues</li>
         <li>🎯 <strong>Methodology-Focused:</strong> Designed specifically for TPR commands and Direct Method pattern drills</li>
