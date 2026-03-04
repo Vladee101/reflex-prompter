@@ -3,6 +3,23 @@ import {
 	Play, RotateCcw, ChevronRight, ChevronLeft, Volume2, Settings, Plus, Trash2, ArrowUp, ArrowDown, Bookmark, FolderOpen, FilePlus, X, Download
 } from 'lucide-react';
 
+import {
+	DndContext,
+	closestCenter,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from '@dnd-kit/core';
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	verticalListSortingStrategy,
+	useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 // --- LOCAL STORAGE KEYS ---
 const LESSONS_STORAGE_KEY = 'reflex_prompter_multi_lessons';
 const CURRENT_LESSON_ID_KEY = 'reflex_current_lesson_id';
@@ -10,6 +27,42 @@ const CURRENT_LESSON_ID_KEY = 'reflex_current_lesson_id';
 // --- DEFAULT DATA ---
 const DEFAULT_LESSON_STEPS = [];
 const DEFAULT_LESSON_NAME = 'Untitled Lesson';
+
+// --- DND-KIT SORTABLE COMPONENT ---
+function SortableWord(props) {
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: props.id });
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			{...listeners}
+			className={`pb-3 transition-opacity duration-300 touch-none cursor-grab ${isDragging ? 'opacity-50 relative z-50' : 'opacity-100'}`}
+		>
+			<div className={`
+				text-lg font-medium px-4 py-2 rounded-lg 
+				bg-gray-700 border border-gray-600 text-gray-100 
+				hover:bg-gray-600 shadow-sm break-words select-none
+				${isDragging ? 'border-dashed border-indigo-400 cursor-grabbing bg-gray-600' : ''}
+			`}>
+				{props.phrase}
+			</div>
+		</div>
+	);
+}
 
 export default function App() {
 	// Modes: 'home', 'running', 'editing'
@@ -26,6 +79,68 @@ export default function App() {
 	// Running State
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [stock, setStock] = useState([]);
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, {
+			activationConstraint: {
+				distance: 5,
+			},
+		}),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		})
+	);
+
+	const handleDragEnd = (event) => {
+		const { active, over } = event;
+
+		if (over && active.id !== over.id) {
+			const oldIndex = stock.indexOf(active.id);
+			const newIndex = stock.indexOf(over.id);
+
+			const newStock = arrayMove(stock, oldIndex, newIndex);
+			setStock(newStock);
+
+			// Reorder the actual lesson plan slides based on the new Word Stock sequence
+			const currentSlideId = lessonPlan[currentIndex]?.id;
+			const groupedSteps = {};
+			const emptySteps = [];
+
+			lessonPlan.forEach(step => {
+				const text = (step.text || '').trim();
+				if (text) {
+					if (!groupedSteps[text]) groupedSteps[text] = [];
+					groupedSteps[text].push(step);
+				} else {
+					emptySteps.push(step);
+				}
+			});
+
+			const newPlan = [];
+
+			// Build the new lesson plan in the order of the Word Stock items
+			newStock.forEach(stockText => {
+				if (groupedSteps[stockText]) {
+					newPlan.push(...groupedSteps[stockText]);
+					delete groupedSteps[stockText]; // mark as processed
+				}
+			});
+
+			// Append any steps that weren't in the stock
+			Object.values(groupedSteps).forEach(steps => newPlan.push(...steps));
+			newPlan.push(...emptySteps);
+
+			setLessonPlan(newPlan);
+
+			// Keep the presenter on the exact same slide they were looking at
+			if (currentSlideId) {
+				const newCurrentIndex = newPlan.findIndex(s => s.id === currentSlideId);
+				if (newCurrentIndex !== -1) {
+					setCurrentIndex(newCurrentIndex);
+				}
+			}
+		}
+	};
 
 	// Fullscreen State
 	const [isFullscreen, setIsFullscreen] = useState(false);
@@ -162,7 +277,8 @@ export default function App() {
 			setLessonPlan(activeLesson.steps.map(step => ({
 				id: step.id,
 				text: step.text,
-				type: step.type || "statement"
+				type: step.type || "shortText",
+				imageData: step.imageData || null
 			})));
 		} else if (storedLessons.length > 0) {
 			// If no stored ID, default to the first saved lesson
@@ -172,7 +288,8 @@ export default function App() {
 			setLessonPlan(activeLesson.steps.map(step => ({
 				id: step.id,
 				text: step.text,
-				type: step.type || "statement"
+				type: step.type || "shortText",
+				imageData: step.imageData || null
 			})));
 		} else {
 			// No saved lessons, stick with the new, empty default plan
@@ -210,7 +327,8 @@ export default function App() {
 		const simplifiedSteps = lessonPlan.map(step => ({
 			id: step.id,
 			text: step.text,
-			type: step.type || "statement", // Ensure type is saved
+			type: step.type || "shortText", // Ensure type is saved
+			imageData: step.imageData || null
 		}));
 
 		const lessonData = {
@@ -247,7 +365,8 @@ export default function App() {
 		setLessonPlan(lesson.steps.map(step => ({
 			id: step.id,
 			text: step.text,
-			type: step.type || "statement"
+			type: step.type || "shortText",
+			imageData: step.imageData || null
 		})));
 		setLessonName(lesson.name);
 		setCurrentLessonId(lesson.id);
@@ -362,20 +481,34 @@ export default function App() {
 
 	const updateSlide = (index, field, value) => {
 		const updated = [...lessonPlan];
-		// Enforce 50 character limit for text field
-		if (field === 'text' && value.length <= 50) {
-			updated[index][field] = value;
-		} else if (field !== 'text') {
-			updated[index][field] = value;
+
+		// Enforce conditions based on field
+		if (field === 'text' && updated[index].type === 'shortText' && value.length > 50) {
+			return; // Do nothing if exceeding limit for short text
 		}
+
+		updated[index][field] = value;
 		setLessonPlan(updated);
+	};
+
+	const handleImageUpload = (index, event) => {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			updateSlide(index, 'imageData', e.target.result);
+			updateSlide(index, 'text', file.name); // Set text to filename for the word stock/preview
+		};
+		reader.readAsDataURL(file);
 	};
 
 	const addSlide = () => {
 		const newSlide = {
 			id: Date.now(),
 			text: "New Slide",
-			type: "statement",
+			type: "shortText",
+			imageData: null
 		};
 		setLessonPlan([...lessonPlan, newSlide]);
 	};
@@ -385,7 +518,7 @@ export default function App() {
 		// The 'Create New Lesson' function ensures we start with at least one slide.
 		if (lessonPlan.length === 1 && index === 0) {
 			// If deleting the last slide, replace it with a fresh blank one instead of an empty array
-			setLessonPlan([{ id: Date.now(), text: "Your First Slide", type: "statement" }]);
+			setLessonPlan([{ id: Date.now(), text: "Your First Slide", type: "shortText", imageData: null }]);
 		} else if (lessonPlan.length > 0) {
 			const updated = lessonPlan.filter((_, i) => i !== index);
 			setLessonPlan(updated);
@@ -404,7 +537,7 @@ export default function App() {
 
 	const createNewLesson = () => {
 		// Start with one slide for immediate editing use
-		setLessonPlan([{ id: Date.now(), text: "Your First Slide", type: "statement" }]);
+		setLessonPlan([{ id: Date.now(), text: "Your First Slide", type: "shortText", imageData: null }]);
 		setLessonName('New Unsaved Lesson');
 		setCurrentLessonId(null);
 		setMode('editing');
@@ -596,37 +729,99 @@ export default function App() {
 				<div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-5xl mx-auto w-full space-y-4">
 					<div className="grid grid-cols-12 gap-4 text-xs font-bold text-gray-400 uppercase tracking-wider px-4 border-b border-gray-700 pb-2">
 						<div className="col-span-1 text-center">#</div>
-						<div className="col-span-10">Slide Text (Max 50 Chars)</div>
+						<div className="col-span-10">Slide Content</div>
 						<div className="col-span-1 text-right">Delete</div>
 					</div>
 
 					{lessonPlan.map((step, index) => (
-						<div key={step.id} className="grid grid-cols-12 gap-4 items-center bg-gray-900 p-3 rounded-xl border border-gray-700 shadow-md hover:border-indigo-500/50 transition-all duration-300">
+						<div key={step.id} className="grid grid-cols-12 gap-4 items-start bg-gray-900 p-3 rounded-xl border border-gray-700 shadow-md hover:border-indigo-500/50 transition-all duration-300">
 
 							{/* Order Controls */}
-							<div className="col-span-1 flex flex-col items-center gap-1">
+							<div className="col-span-1 flex flex-col items-center gap-1 pt-2">
 								<button onClick={() => moveSlide(index, 'up')} disabled={index === 0} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-20 transition-colors" title="Move Up"><ArrowUp size={16} /></button>
 								<span className="text-gray-500 font-mono text-sm">{index + 1}</span>
 								<button onClick={() => moveSlide(index, 'down')} disabled={index === lessonPlan.length - 1} className="text-indigo-400 hover:text-indigo-300 disabled:opacity-20 transition-colors" title="Move Down"><ArrowDown size={16} /></button>
 							</div>
 
-							{/* Display Text (col-span-10) */}
-							<div className="col-span-10">
-								<input
-									type="text"
-									value={step.text}
-									onChange={(e) => updateSlide(index, 'text', e.target.value)}
-									maxLength={50}
-									className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
-									placeholder="e.g. I am not"
-								/>
-								<span className="text-xs text-gray-500 float-right mt-1">
-									{step.text.length} / 50
-								</span>
+							{/* Display Content (col-span-10) */}
+							<div className="col-span-10 space-y-2">
+								<div className="flex items-center gap-2">
+									<select
+										value={step.type || 'shortText'} // Default to shortText if old format statement
+										onChange={(e) => updateSlide(index, 'type', e.target.value)}
+										className="bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded-lg py-1 px-2 outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 max-w-[160px]"
+									>
+										<option value="shortText">Short Text (Max 50)</option>
+										<option value="longText">Long Text</option>
+										<option value="image">Image Display</option>
+									</select>
+								</div>
+
+								{(step.type === 'shortText' || step.type === 'statement' || !step.type) && (
+									<div>
+										<input
+											type="text"
+											value={step.text}
+											onChange={(e) => updateSlide(index, 'text', e.target.value)}
+											maxLength={50}
+											className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+											placeholder="e.g. I am not"
+										/>
+										<span className="text-xs text-gray-500 float-right mt-1">
+											{step.text.length} / 50
+										</span>
+									</div>
+								)}
+
+								{step.type === 'longText' && (
+									<div>
+										<textarea
+											value={step.text}
+											onChange={(e) => updateSlide(index, 'text', e.target.value)}
+											rows={3}
+											className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors resize-y"
+											placeholder="Enter paragraphs of text here..."
+										/>
+									</div>
+								)}
+
+								{step.type === 'image' && (
+									<div className="bg-gray-800 border-2 border-dashed border-gray-700 rounded-lg p-4 flex flex-col items-center justify-center min-h-[100px]">
+										{step.imageData ? (
+											<div className="relative group">
+												<img src={step.imageData} alt="slide preview" className="max-h-32 rounded-md object-contain" />
+												<div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
+													<label className="cursor-pointer px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white">
+														Change Image
+														<input
+															type="file"
+															accept="image/png, image/jpeg, image/jpg"
+															onChange={(e) => handleImageUpload(index, e)}
+															className="hidden"
+														/>
+													</label>
+												</div>
+											</div>
+										) : (
+											<div className="flex flex-col items-center">
+												<p className="text-sm text-gray-400 mb-2">No image selected</p>
+												<label className="cursor-pointer px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white font-medium shadow-md transition-colors">
+													Upload Image
+													<input
+														type="file"
+														accept="image/png, image/jpeg, image/jpg"
+														onChange={(e) => handleImageUpload(index, e)}
+														className="hidden"
+													/>
+												</label>
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
 							{/* Actions (col-span-1) */}
-							<div className="col-span-1 text-right">
+							<div className="col-span-1 text-right pt-2">
 								<button
 									onClick={() => deleteSlide(index)}
 									className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/30 rounded-full transition-colors"
@@ -654,10 +849,37 @@ export default function App() {
 
 	// 3. RUNNING CLASS SCREEN
 	const currentStep = lessonPlan[currentIndex] || lessonPlan[0]; // Safety fallback
-	const styles = getTypeStyles(currentStep.type);
 
-	// FIXED FONT SIZING LOGIC
-	const finalH1Class = 'text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-extrabold tracking-tight text-center w-full break-words';
+	const renderCurrentStep = () => {
+		if (!currentStep) return <h1 className="text-6xl text-gray-500">Lesson Empty</h1>
+
+		if (currentStep.type === 'image' && currentStep.imageData) {
+			return (
+				<img
+					src={currentStep.imageData}
+					alt="slide"
+					className="max-h-[85vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+				/>
+			);
+		}
+
+		if (currentStep.type === 'longText') {
+			return (
+				<div className="w-full max-w-5xl px-8">
+					<p className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-tight font-semibold text-center text-white break-words whitespace-pre-wrap">
+						{currentStep.text || '...'}
+					</p>
+				</div>
+			);
+		}
+
+		// Default (shortText / statement)
+		return (
+			<h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-extrabold tracking-tight text-center w-full break-words text-white">
+				{currentStep.text || '...'}
+			</h1>
+		);
+	};
 
 	return (
 		<div className="flex h-screen bg-gray-950 overflow-hidden font-sans">
@@ -673,16 +895,10 @@ export default function App() {
 					/>
 				</div>
 
-				{/* Content Area: Full-screen centered text */}
+				{/* Content Area: Full-screen centered text/image */}
 				<div className="flex-1 flex flex-col items-center justify-center overflow-hidden">
-					<div className="flex-1 flex flex-col items-center justify-center p-8 z-10 w-full">
-						<div className={`transition-all duration-300 transform text-white flex flex-col items-center w-full`}>
-							<h1
-								className={finalH1Class}
-							>
-								{currentStep?.text || 'Lesson Empty'}
-							</h1>
-						</div>
+					<div className="flex-1 flex flex-col items-center justify-center p-8 z-10 w-full animate-fade-in">
+						{renderCurrentStep()}
 					</div>
 				</div>
 
@@ -735,25 +951,20 @@ export default function App() {
 				</div>
 
 				<div className="flex-1 p-4 overflow-y-auto">
-					{stock.map((phrase, idx) => (
-						<div
-							key={phrase}
-							// WRAPPER: Handles spacing via padding (not margin/gap) to avoid dead zones
-							className={`
-								pb-3 transition-all duration-300
-							`}
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						onDragEnd={handleDragEnd}
+					>
+						<SortableContext
+							items={stock}
+							strategy={verticalListSortingStrategy}
 						>
-							{/* VISUAL CARD: The actual content */}
-							<div className={`
-								text-lg font-medium px-4 py-2 rounded-lg 
-								bg-gray-700 border border-gray-600 text-gray-100 
-								hover:bg-gray-600 shadow-sm break-words
-							`}
-							>
-								{phrase}
-							</div>
-						</div>
-					))}
+							{stock.map((phrase) => (
+								<SortableWord key={phrase} id={phrase} phrase={phrase} />
+							))}
+						</SortableContext>
+					</DndContext>
 
 					{stock.length === 0 && (
 						<div className="text-gray-600 italic text-center p-6">

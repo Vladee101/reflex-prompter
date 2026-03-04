@@ -1,6 +1,6 @@
 {
   "name": "reflex",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -16,6 +16,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tailwindcss/vite": "^4.1.17",
     "@tauri-apps/api": "^1.6.0",
     "@tauri-apps/cli": "^1.6.3",
